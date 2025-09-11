@@ -112,6 +112,10 @@ class BaseRunServerConfig(BaseServerConfig):
     entrypoint: str
 
 
+class BaseRunServerInstanceConfig(BaseRunServerConfig):
+    name: str  # This name is unique at runtime.
+
+
 ########################################
 # Server type and server instance configs
 ########################################
