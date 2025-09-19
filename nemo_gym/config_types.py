@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Literal, Optional, Union
 
 from omegaconf import DictConfig, OmegaConf
@@ -136,6 +137,8 @@ class BaseRunServerTypeConfig(BaseRunServerConfig):
 
     datasets: Optional[List[DatasetConfig]] = None
 
+    misc_train_prep_entrypoint: Optional[str] = None
+
 
 class BaseServerTypeConfig(BaseModel):
     SERVER_TYPE: ClassVar[
@@ -197,6 +200,11 @@ class BaseServerInstanceConfig(BaseServerTypeConfig):
     @property
     def datasets(self) -> Optional[List[DatasetConfig]]:
         return self.get_inner_run_server_config().datasets
+
+    @property
+    def working_directory(self) -> Path:
+        server_type_name = list(getattr(self, self.SERVER_TYPE))[0]
+        return Path(f"{self.SERVER_TYPE}/{server_type_name}")
 
 
 class ResponsesAPIModelServerInstanceConfig(ResponsesAPIModelServerTypeConfig, BaseServerInstanceConfig):
