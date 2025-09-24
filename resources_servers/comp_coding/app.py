@@ -31,7 +31,7 @@ from nemo_gym.base_resources_server import (
 # Config
 # ----------------------------
 class CompCodingResourcesServerConfig(BaseResourcesServerConfig):
-    pass
+    num_workers: int
 
 
 # ----------------------------
