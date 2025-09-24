@@ -14,6 +14,7 @@
 import asyncio
 import atexit
 import json
+import resource
 from abc import abstractmethod
 from contextlib import asynccontextmanager
 from io import StringIO
@@ -36,7 +37,6 @@ from fastapi.responses import JSONResponse
 from omegaconf import DictConfig, OmegaConf
 from pydantic import BaseModel, ConfigDict
 from requests.exceptions import ConnectionError
-from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
 from nemo_gym import PARENT_DIR
@@ -328,14 +328,6 @@ class SimpleServer(BaseServer):
         app.add_middleware(SessionMiddleware, secret_key=session_middleware_key, session_cookie=session_middleware_key)
 
     def setup_exception_middleware(self, app: FastAPI) -> None:
-        @app.exception_handler(StarletteHTTPException)
-        async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-            print(exc.detail)
-            print(
-                "🚨 Caught an exception printed above. Right now, the exception repr i.e. `repr(e)` is returned to the model. However, please make sure this exception is caught in your server and returned to the model as appropriate. See https://fastapi.tiangolo.com/tutorial/handling-errors/#use-httpexception"
-            )
-            return JSONResponse(content=exc.detail, status_code=exc.status_code)
-
         @app.middleware("http")
         async def exception_handling_middleware(request: Request, call_next):
             try:
@@ -407,6 +399,24 @@ class SimpleServer(BaseServer):
         def stats():
             return Response(_dump_yappi_stats())
 
+    def set_ulimit(self, target_soft_limit: int = 65535):
+        # From https://github.com/vllm-project/vllm/blob/fed8a9b107df3e27d57728c6911c7d308b871477/vllm/utils/__init__.py#L2790
+        resource_type = resource.RLIMIT_NOFILE
+        current_soft, current_hard = resource.getrlimit(resource_type)
+
+        if current_soft < target_soft_limit:
+            try:
+                resource.setrlimit(resource_type, (target_soft_limit, current_hard))
+            except ValueError as e:
+                print(
+                    "Found ulimit of %s and failed to automatically increase "
+                    "with error %s. This can cause fd limit errors like "
+                    "`OSError: [Errno 24] Too many open files`. Consider "
+                    "increasing with ulimit -n",
+                    current_soft,
+                    e,
+                )
+
     @classmethod
     def run_webserver(cls) -> None:  # pragma: no cover
         global_config_dict = get_global_config_dict()
@@ -419,6 +429,8 @@ class SimpleServer(BaseServer):
         server = cls(config=server_config, server_client=server_client)
 
         app = server.setup_webserver()
+
+        server.set_ulimit()
 
         server.setup_exception_middleware(app)
 
