@@ -182,7 +182,7 @@ def _extract_text_from_response(response_obj) -> Optional[str]:
 class CompCodingResourcesServer(SimpleResourcesServer):
     config: CompCodingResourcesServerConfig
 
-    async def verify(self, body: CompCodingVerifyRequest) -> CompCodingVerifyResponse:
+    def verify(self, body: CompCodingVerifyRequest) -> CompCodingVerifyResponse:
         model_out = _extract_text_from_response(body.response)
         if not model_out or not model_out.strip():
             # A response existed but had no usable text -> model failure
