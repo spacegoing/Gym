@@ -73,10 +73,9 @@ class RolloutCollectionHelper(BaseModel):  # pragma: no cover
         with open(config.output_jsonl_fpath, "a") as f:
 
             async def _post_coroutine(row: dict) -> None:
+                row["responses_create_params"] = row["responses_create_params"] | config.responses_create_params
                 async with semaphore:
-                    response = await server_client.post(
-                        server_name=config.agent_name, url_path="/run", json=row | config.responses_create_params
-                    )
+                    response = await server_client.post(server_name=config.agent_name, url_path="/run", json=row)
                     result = await response.json()
                     f.write(json.dumps(result) + "\n")
                     metrics.update({k: v for k, v in result.items() if isinstance(v, (int, float))})
