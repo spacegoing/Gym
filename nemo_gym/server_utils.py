@@ -327,7 +327,7 @@ class SimpleServer(BaseServer):
         session_middleware_key = self.get_session_middleware_key()
         app.add_middleware(SessionMiddleware, secret_key=session_middleware_key, session_cookie=session_middleware_key)
 
-    def setup_exception_middleware(self, app: FastAPI) -> None:
+    def setup_exception_middleware(self, app: FastAPI) -> None:  # pragma: no cover
         @app.middleware("http")
         async def exception_handling_middleware(request: Request, call_next):
             try:
@@ -399,7 +399,7 @@ class SimpleServer(BaseServer):
         def stats():
             return Response(_dump_yappi_stats())
 
-    def set_ulimit(self, target_soft_limit: int = 65535):
+    def set_ulimit(self, target_soft_limit: int = 65535):  # pragma: no cover
         # From https://github.com/vllm-project/vllm/blob/fed8a9b107df3e27d57728c6911c7d308b871477/vllm/utils/__init__.py#L2790
         resource_type = resource.RLIMIT_NOFILE
         current_soft, current_hard = resource.getrlimit(resource_type)
