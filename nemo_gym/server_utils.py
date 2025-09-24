@@ -329,7 +329,7 @@ class SimpleServer(BaseServer):
 
     def setup_exception_middleware(self, app: FastAPI) -> None:
         @app.exception_handler(StarletteHTTPException)
-        async def http_exception_handler(exc: StarletteHTTPException):
+        async def http_exception_handler(request: Request, exc: StarletteHTTPException):
             print(exc.detail)
             print(
                 "🚨 Caught an exception printed above. Right now, the exception repr i.e. `repr(e)` is returned to the model. However, please make sure this exception is caught in your server and returned to the model as appropriate. See https://fastapi.tiangolo.com/tutorial/handling-errors/#use-httpexception"
