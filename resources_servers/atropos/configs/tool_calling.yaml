@@ -1,8 +1,14 @@
-# Multi-Turn Tool Calling
 tool_calling_atropos_resources_server:
   resources_servers:
     atropos:
-      entrypoint: tool_calling_app.py
+      entrypoint: app.py
+      domain: agent
+
+      atropos_path: /raid/home/cmunley/Gym/atropos
+      environment_module: environments.tool_use_multiturn_server
+      environment_class: MultiTurnToolCallingEnv
+      group_size: 8
+      env_args: {}
 
 tool_calling_atropos_agent:
   responses_api_agents:
@@ -11,6 +17,3 @@ tool_calling_atropos_agent:
       resources_server:
         type: resources_servers
         name: tool_calling_atropos_resources_server
-      model_server:
-        type: responses_api_models
-        name: policy_model

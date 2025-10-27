@@ -1,0 +1,26 @@
+gsm8k_atropos_resources_server:
+  resources_servers:
+    atropos:
+      entrypoint: app.py
+      domain: agent
+
+      atropos_path: /raid/home/cmunley/Gym/atropos
+
+      environment_module: environments.gsm8k_server
+      environment_class: GSM8kEnv
+
+      trajectory_api_port: 9999
+      trajectory_api_url: http://localhost:9999
+
+      group_size: 8
+
+      env_args:
+        use_wandb: false
+
+gsm8k_atropos_agent:
+  responses_api_agents:
+    atropos_agent:
+      entrypoint: app.py
+      resources_server:
+        type: resources_servers
+        name: gsm8k_atropos_resources_server
