@@ -69,7 +69,7 @@ uv sync --active --extra dev
 
 # Prepare data
 config_paths="responses_api_models/openai_model/configs/openai_model.yaml,\
-resources_servers/library_judge_math/configs/bytedtsinghua_dapo17k.yaml"
+resources_servers/math_with_judge/configs/bytedtsinghua_dapo17k.yaml"
 ng_prepare_data "+config_paths=[${config_paths}]" \
     +output_dirpath=data/bytedtsinghua_dapo17k \
     +mode=train_preparation +should_download=true

@@ -204,7 +204,7 @@ Naming convention for Huggingface datasets is as follows.
 
 E.g.:
 
-`Nvidia/Nemo-Gym-Math-library_judge_math-dapo17k`
+`Nvidia/Nemo-Gym-Math-math_with_judge-dapo17k`
 
 
 You will only need to manually input the `{your dataset name}` portion of the above when inputting the `dataset_name` flag in the upload command (see below). Everything preceding it will be automatically populated using your config prior to upload.
