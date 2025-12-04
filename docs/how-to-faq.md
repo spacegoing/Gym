@@ -265,8 +265,8 @@ Downloading a dataset from Huggingface is straightforward:
 ```bash
 ng_download_dataset_from_hf \
     +repo_id=nvidia/Nemotron-RL-instruction_following \
-    +artifact_fpath=train.jsonl \
-    +output_fpath=data/train.jsonl
+    +output_fpath=data/train.jsonl \
+    +artifact_fpath=train.jsonl
 ```
 
 **For parquet datasets** (omit `artifact_fpath`, specify `split`):
