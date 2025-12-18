@@ -596,7 +596,7 @@ def get_openhands_trajectory_from_completions(
 
 def extract_problem_info(
     body: NeMoGymResponseCreateParamsNonStreaming,
-    container_formatter: str,
+    container_formatter: str | list[str],
 ) -> Dict:
     # Get metadata
     metadata = body.metadata

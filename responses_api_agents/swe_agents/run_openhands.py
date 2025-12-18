@@ -359,16 +359,22 @@ class RunOpenHandsAgent:
             FileNotFoundError: If no matching container file is found.
         """
         instance_id = data_point["instance_id"]
-        container_formatter = data_point["container_formatter"]
+        container_formatters = data_point["container_formatter"]
+
+        if isinstance(container_formatters, str):
+            container_formatters = [container_formatters]
+
         if "R2E-Gym" in data_point["dataset_name"]:
             instance_id_modified = re.sub(
                 r"[^_]+__([^-]+)-", lambda m: m.group(1).lower() + "_final_", data_point["instance_id"]
             )
-            container_name = data_point["container_formatter"].format(instance_id=instance_id_modified)
-            if os.path.exists(container_name):
-                print(f"container found: {container_name}", flush=True)
-                print(f"container formatter: {data_point['container_formatter']}", flush=True)
-                return container_name
+            for container_formatter in container_formatters:
+                container_name = container_formatter.format(instance_id=instance_id_modified)
+                if os.path.exists(container_name):
+                    print(f"container found: {container_name}", flush=True)
+                    print(f"container formatter: {container_formatter}", flush=True)
+                    return container_name
+
         replacements = ["_1776_", "_s_"]
 
         # Generate all candidate IDs in order of priority
@@ -378,39 +384,45 @@ class RunOpenHandsAgent:
             candidate_ids.append(replaced_id)
             candidate_ids.append(replaced_id.lower())
 
-        # Phase 1: Exact Matches
-        for candidate_id in candidate_ids:
-            path = container_formatter.format(instance_id=candidate_id)
-            if os.path.exists(path):
-                return path
+        # Phase 1: Exact Matches - try all container formatters
+        for container_formatter in container_formatters:
+            for candidate_id in candidate_ids:
+                path = container_formatter.format(instance_id=candidate_id)
+                if os.path.exists(path):
+                    return path
 
-        # Define the default fallback path (Strategy 1, original case)
-        fallback_path = container_formatter.format(instance_id=instance_id.replace("__", replacements[0]))
-        container_dir = os.path.dirname(fallback_path)
+        # Phase 2: Fuzzy Search - try all container formatters
+        search_terms = [instance_id, instance_id.lower()] + candidate_ids
 
-        # Phase 2: Fuzzy Search
-        if os.path.exists(container_dir):
-            # Create glob patterns for all candidates plus the original instance_id
-            search_terms = [instance_id, instance_id.lower()] + candidate_ids
+        for container_formatter in container_formatters:
+            # Define the default fallback path (Strategy 1, original case)
+            fallback_path = container_formatter.format(instance_id=instance_id.replace("__", replacements[0]))
+            container_dir = os.path.dirname(fallback_path)
 
-            for term in search_terms:
-                pattern = os.path.join(container_dir, f"*{term}*.sif")
-                matches = glob.glob(pattern)
-                if matches:
-                    return matches[0]
+            if os.path.exists(container_dir):
+                for term in search_terms:
+                    pattern = os.path.join(container_dir, f"*{term}*.sif")
+                    matches = glob.glob(pattern)
+                    if matches:
+                        return matches[0]
 
-            print(
-                f"No container found with replacements {replacements} in {container_dir}",
-                flush=True,
-            )
-        else:
-            print(f"Container directory {container_dir} does not exist", flush=True)
+                print(
+                    f"No container found with replacements {replacements} in {container_dir}",
+                    flush=True,
+                )
+            else:
+                print(f"Container directory {container_dir} does not exist", flush=True)
 
         # Phase 3: Fallback
+        tried_paths = []
+        for container_formatter in container_formatters:
+            for candidate_id in candidate_ids:
+                tried_paths.append(container_formatter.format(instance_id=candidate_id))
+
         raise FileNotFoundError(
             f"No container file found for instance_id {instance_id}. "
             f"Tried the following candidate IDs: {candidate_ids}. "
-            f"Also looked for .sif files in {container_dir}."
+            f"Searched in paths: {tried_paths}."
         )
 
     async def _execute_container_command(

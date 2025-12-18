@@ -85,7 +85,7 @@ class SWEBenchWrapperConfig(BaseResponsesAPIAgentConfig):
         default="HEAD", description="Which commit to use when cloning the SWE-agent/OpenHands repo"
     )
     # Container configuration
-    container_formatter: str = Field(
+    container_formatter: str | list[str] = Field(
         default="docker://swebench/sweb.eval.x86_64.{instance_id}", description="Container path template"
     )
     swebench_tests_timeout: int = Field(default=1800, description="Timeout for running tests (seconds)")
