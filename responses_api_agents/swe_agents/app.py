@@ -67,7 +67,10 @@ class SWEBenchWrapperConfig(BaseResponsesAPIAgentConfig):
     model_server: ModelServerRef
 
     # Agent framework configuration
-    agent_framework: str = Field(default="swe_agent", description="Agent framework to use: swe_agent or openhands")
+    agent_framework: str = Field(
+        default="swe_agent",
+        description="Agent framework to use: swe_agent or openhands",
+    )
     agent_config: Optional[str] = Field(default=None, description="Path to agent configuration file")
     agent_tools_file: Optional[str] = Field(
         default=None, description="Path to JSON file containing tool definitions in OpenAI format (for SWE-agent)"
@@ -160,37 +163,18 @@ class SWEBenchWrapper(SimpleResponsesAPIAgent):
 
         # Pre-build OpenHands environment if using openhands framework
         if self.config.agent_framework == "openhands":
-            try:
-                self.config.openhands_setup_dir = setup_openhands_environment(
-                    agent_framework_repo=self.config.agent_framework_repo,
-                    agent_framework_commit=self.config.agent_framework_commit,
-                )
-                print(f"OpenHands environment ready at: {self.config.openhands_setup_dir}", flush=True)
-            except Exception as e:
-                print(f"Failed to set up OpenHands environment: {e}", flush=True)
-                raise e
+            self.config.openhands_setup_dir = setup_openhands_environment(
+                agent_framework_repo=self.config.agent_framework_repo,
+                agent_framework_commit=self.config.agent_framework_commit,
+            )
+        self.config.swebench_setup_dir = setup_swebench_environment()
+        self.config.r2e_gym_setup_dir = setup_r2e_gym_environment()
 
-        print("Setting up SWE-bench environment during initialization...", flush=True)
-        try:
-            self.config.swebench_setup_dir = setup_swebench_environment()
-            print(f"SWE-bench environment ready at: {self.config.swebench_setup_dir}", flush=True)
-        except Exception as e:
-            print(f"Failed to set up SWE-bench environment: {e}", flush=True)
-            raise
-
-        print("Setting up R2E-gym environment during initialization...", flush=True)
-        try:
-            self.config.r2e_gym_setup_dir = setup_r2e_gym_environment()
-            print(f"R2E-gym environment ready at: {self.config.r2e_gym_setup_dir}", flush=True)
-        except Exception as e:
-            print(f"Failed to set up R2E-gym environment: {e}", flush=True)
-            raise
+        print("Dependencies repositories set up complete", flush=True)
 
         self.config.run_session_id = f"{int(time.time() * 1000)}_{str(uuid.uuid4())[:8]}"
 
     async def responses(self, body: NeMoGymResponseCreateParamsNonStreaming = Body()) -> NeMoGymResponse:
-        print(f"Starting SWE-bench evaluation with framework: {self.config.agent_framework}", flush=True)
-
         # Extract problem information from request
         problem_info = extract_problem_info(
             body,
@@ -220,7 +204,7 @@ class SWEBenchWrapper(SimpleResponsesAPIAgent):
                 "dataset_path": self.config.dataset_path,
             }
             future = runner_ray_remote.remote(run_swebench_evaluation, params)
-            result = await asyncio.to_thread(ray.get, future)
+            result = await future
 
             # Extract trajectory and convert to proper NeMoGym format
             output_items = []

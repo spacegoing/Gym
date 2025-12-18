@@ -126,7 +126,7 @@ dependencies = [
     # MLFlow: used for interacting with the Gitlab model registry
     # Updated Tue Aug 05, 2025 with mlflow==3.2.0
     # License: Apache 2.0 https://github.com/mlflow/mlflow/blob/1510ed1bc92d3a4258973005d64f64a43136e251/LICENSE.txt
-    "mlflow<3.5.0",  # Pin to <3.5 to avoid cryptography>=43 requirement
+    "mlflow",
 
     # Tdigest: Data structure for percentiles and quantiles, specifically calculating metrics such as median in a memory-efficient way.
     # Updated Wed Sep 17, 2025 with tdigest==0.5.2.2
@@ -147,12 +147,6 @@ dependencies = [
     # Updated Fri Oct 18, 2025 with ray[default]==2.46.0
     # License: Apache 2.0 https://github.com/ray-project/ray/blob/master/LICENSE
     "ray[default]",
-    
-    # Cryptography: Pin to <43 for compatibility with nemo-run (used by nemo-skills)
-    "cryptography<43.0.0",
-    
-    # urllib3: Pin to <1.27 for compatibility with torchx (required by nemo-run)
-    "urllib3>=1.21.1,<1.27",
 ]
 
 [dependency-groups]
@@ -204,19 +198,6 @@ dev = [
     # License: Apache 2.0 https://github.com/jamielennox/requests-mock/blob/9742d02a8cad17276dbeba7b300b6d27ae1b6fb1/LICENSE
     "requests-mock",
 ]
-nemo-skills = [
-    # NeMo-Skills: Required for SWE-bench wrapper agent and other code evaluation capabilities
-    # Updated: Dec 2024
-    # License: Apache 2.0 https://github.com/NVIDIA/NeMo-Skills/blob/main/LICENSE
-    "nemo-skills @ git+https://github.com/slikhite-1/Skills.git@jiaqiz/fix-swe",
-    
-    # Compatibility constraints for nemo-skills dependencies
-    # We need datasets >= 2.18.0 for compatibility with pyarrow >= 17.0.0
-    "datasets>=2.18.0",
-    "pyarrow>=17.0.0,<22.0.0",
-    # nemo-run (pulled in by nemo-skills) requires cryptography < 43.0.0
-    "cryptography<43.0.0",
-]
 
 [build-system]
 requires = ["setuptools>=61", "setuptools-scm"]
@@ -224,9 +205,6 @@ build-backend = "setuptools.build_meta"
 
 [tool.uv]
 managed = true
-
-[tool.uv.extra-build-dependencies]
-sweagent = ["setuptools>=61"]
 
 [tool.setuptools.dynamic]
 version = {attr = "nemo_gym.__version__"}

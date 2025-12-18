@@ -46,9 +46,6 @@ from responses_api_agents.swe_agents.run_openhands import (
 )
 
 
-LOG = logging.getLogger(__name__)
-
-
 ### Trajectory Conversion Utils ###
 
 
@@ -360,9 +357,9 @@ def get_trajectory_and_tools(
                         history = traj_content["history"]
                         trajectory_steps = traj_content["trajectory"]
                         trajectory_data = extract_data_from_trajectory(trajectory_steps, history)
-                    LOG.info(f"Found and loaded SWE-agent trajectory file: {traj_files[0]}")
+                    print(f"Found and loaded SWE-agent trajectory file: {traj_files[0]}", flush=True)
                 except Exception as e:
-                    LOG.warning(f"Failed to read trajectory file {traj_files[0]}: {e}")
+                    print(f"Failed to read trajectory file {traj_files[0]}: {e}", flush=True)
 
                 # Load SWE-agent tools from the configured JSON file
                 if agent_tools_file:
@@ -371,15 +368,15 @@ def get_trajectory_and_tools(
                         with open(tools_file, "r") as f:
                             tools_data = json.load(f)
                             tools = tools_data.get("tools", [])
-                            LOG.info(f"Loaded SWE-agent tools from {tools_file}")
+                            print(f"Loaded SWE-agent tools from {tools_file}", flush=True)
                     else:
-                        LOG.warning(f"SWE-agent tools file not found: {tools_file}")
+                        print(f"SWE-agent tools file not found: {tools_file}", flush=True)
                 else:
-                    LOG.warning("No agent_tools_file configured for SWE-agent")
+                    print("No agent_tools_file configured for SWE-agent", flush=True)
         else:
-            LOG.warning(f"No trajectory files found in {trajectories_dir}")
+            print(f"No trajectory files found in {trajectories_dir}", flush=True)
     else:
-        LOG.warning(f"Unsupported agent framework: {agent_framework}")
+        print(f"Unsupported agent framework: {agent_framework}", flush=True)
 
     return trajectory_data, tools
 
@@ -423,7 +420,7 @@ def extract_messages(trajectory_item) -> List[Dict]:
     """
     # Defensive check: if trajectory_item is not a dict, return empty list
     if not isinstance(trajectory_item, dict):
-        LOG.warning(f"trajectory_item is not a dict (type: {type(trajectory_item)}). Skipping.")
+        print(f"trajectory_item is not a dict (type: {type(trajectory_item)}). Skipping.", flush=True)
         return []
 
     tool_calls = trajectory_item.get("tool_calls")
@@ -475,27 +472,28 @@ def extract_data_from_trajectory(
 
     # Defensive checks for trajectory_data structure
     if not trajectories_copy or len(trajectories_copy) == 0:
-        LOG.warning("Empty trajectories_copy, returning empty trajectory")
+        print("Empty trajectories_copy, returning empty trajectory", flush=True)
         return []
 
     # Check if last trajectory item is a dict
     if not isinstance(trajectories_copy[-1], dict):
-        LOG.warning(
-            f"Last trajectory item is not a dict (type: {type(trajectories_copy[-1])}), returning empty trajectory"
+        print(
+            f"Last trajectory item is not a dict (type: {type(trajectories_copy[-1])}), returning empty trajectory",
+            flush=True,
         )
         return []
 
     # Check if "query" key exists and is a list
     if "query" not in trajectories_copy[-1] or not isinstance(trajectories_copy[-1]["query"], list):
-        LOG.warning("'query' key missing or not a list in last trajectory item, returning empty trajectory")
+        print("'query' key missing or not a list in last trajectory item, returning empty trajectory", flush=True)
         return []
 
     if len(trajectories_copy[-1]["query"]) > 0 and len(trajectories_copy[-1]["query"][0]) == 0:  # error case
         if len(trajectories_copy) < 2:
-            LOG.warning("Not enough trajectory items for error case, returning empty trajectory")
+            print("Not enough trajectory items for error case, returning empty trajectory", flush=True)
             return []
         if not isinstance(trajectories_copy[-2], dict) or "query" not in trajectories_copy[-2]:
-            LOG.warning("Second-to-last trajectory item is malformed, returning empty trajectory")
+            print("Second-to-last trajectory item is malformed, returning empty trajectory", flush=True)
             return []
         final_trajectory = trajectories_copy[-2]["query"].copy()
         final_trajectory.extend(extract_messages(trajectories_copy[-2]))
@@ -698,7 +696,7 @@ async def run_swebench_evaluation(
         with open(output_file, "w") as f:
             json.dump(result, f)
     except Exception as e:
-        LOG.error(f"Failed to write result to {output_file}: {e}")
+        print(f"Failed to write result to {output_file}: {e}", flush=True)
         raise e
 
     # Read results

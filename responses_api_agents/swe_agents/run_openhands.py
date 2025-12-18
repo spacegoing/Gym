@@ -1,7 +1,6 @@
 import asyncio
 import glob
 import json
-import logging
 import os
 import re
 import shlex
@@ -15,10 +14,6 @@ from typing import Any, Optional
 import tomlkit
 
 
-logging.basicConfig(level=logging.INFO)
-LOG = logging.getLogger(__name__)
-
-
 class SupportedAgentFrameworks(str, Enum):
     swe_agent = "swe_agent"
     openhands = "openhands"
@@ -26,6 +21,7 @@ class SupportedAgentFrameworks(str, Enum):
 
 SUPPORTED_DATASETS = [
     "SWE-Gym/SWE-Gym",
+    "R2E-Gym/R2E-Gym-Subset",
     "princeton-nlp/SWE-bench_Verified",
     "nv-internal-1",
 ]
@@ -33,9 +29,9 @@ SUPPORTED_DATASETS = [
 
 @dataclass
 class SweBenchInferenceConfig:
-    temperature: float = 0.0
+    temperature: float = 1.0
     top_k: int | None = None
-    top_p: float = 0.95
+    top_p: float = 1.0
     min_p: float | None = None
     random_seed: int | None = None
     tokens_to_generate: int | None = None
@@ -370,8 +366,8 @@ class RunOpenHandsAgent:
             )
             container_name = data_point["container_formatter"].format(instance_id=instance_id_modified)
             if os.path.exists(container_name):
-                LOG.info(f"container found: {container_name}")
-                LOG.info(f"container formatter: {data_point['container_formatter']}")
+                print(f"container found: {container_name}", flush=True)
+                print(f"container formatter: {data_point['container_formatter']}", flush=True)
                 return container_name
         replacements = ["_1776_", "_s_"]
 
@@ -496,7 +492,7 @@ class RunOpenHandsAgent:
         if mode == "eval" and "R2E-Gym" in data_point["dataset_name"]:
             # Mount the entire setup directory at both /r2egym_setup and its original absolute path
             # This is needed because uv venv has hardcoded absolute paths in its wrappers
-            LOG.info(f"Mounting R2E-Gym setup directory from: {self.r2e_gym_setup_dir}")
+            print(f"Mounting R2E-Gym setup directory from: {self.r2e_gym_setup_dir}", flush=True)
             mount_args.append(f"--mount type=bind,src={self.r2e_gym_setup_dir},dst=/r2egym_setup")
             mount_args.append(f"--mount type=bind,src={self.r2e_gym_setup_dir},dst={self.r2e_gym_setup_dir}")
             mount_args.append(f"--mount type=bind,src={dataset_path_to_mount},dst=/root/dataset/data.jsonl")
@@ -613,7 +609,6 @@ class RunOpenHandsAgent:
             agent_run_id,
             "report.json",
         )
-        LOG.info(f"Search path: {search_path}")
         report_file = await self._execute_container_command(
             data_point,
             r2e_gym_cmd,
@@ -622,7 +617,6 @@ class RunOpenHandsAgent:
             timeout=self.cfg.swebench_tests_timeout + 120,
             dataset_mount_path=instance_dataset_path,
         )
-        LOG.info(f"Report file: {report_file}")
         return report_file
 
     async def _run_swebench_eval(
@@ -653,7 +647,7 @@ class RunOpenHandsAgent:
             f"    --split {data_point['split']} "
             f"    --run_id {agent_run_id} && "
             f"cp -r logs/run_evaluation/{agent_run_id} /trajectories_mount/ && "
-            f"rm -rf logs/run_evaluation/{agent_run_id}"
+            f"rm -rf logs/run_evaluation/{agent_run_id} && rm -rf *{agent_run_id}*"
         )
 
         # Execute SWE-bench evaluation command
@@ -728,6 +722,106 @@ class RunOpenHandsAgent:
             f.seek(0)
             f.write(json.dumps({data_point["instance_id"]: report_dict}, indent=4))
             return report_file
+
+    async def prepare_nv_internal_eval(self, data_point: dict[str, Any], model_patch: str):
+        instance_dict = json.loads(data_point["instance_dict"])
+        base_dockerfile = instance_dict.get("base_dockerfile", "")
+        instance_dockerfile = instance_dict.get("instance_dockerfile", "")
+
+        env_lines = []
+        for line in (base_dockerfile + "\n" + instance_dockerfile).split("\n"):
+            line = line.strip()
+            if line.startswith("ENV "):
+                # Convert ENV KEY=VALUE or ENV KEY VALUE to export KEY="VALUE"
+                export_line = line.replace("ENV ", "export ", 1)
+                # Handle both Docker ENV formats:
+                # 1. ENV KEY=VALUE (with equals)
+                # 2. ENV KEY VALUE (space-separated)
+                if "=" in export_line:
+                    # Format: export KEY=VALUE -> normalize spaces around =
+                    export_line = re.sub(r"\s*=\s*", "=", export_line)
+                else:
+                    # Format: export KEY VALUE -> convert to export KEY="VALUE"
+                    parts = export_line.split(None, 2)  # Split into at most 3 parts
+                    if len(parts) >= 3:  # export KEY VALUE
+                        key = parts[1]
+                        value = parts[2]
+                        export_line = f'export {key}="{value}"'
+
+                env_lines.append(export_line)
+
+        env_exports = "\n".join(env_lines)
+
+        # Get repo setup command
+        repo_cmd = instance_dict.get("before_repo_set_cmd", "").strip()
+        if repo_cmd:
+            repo_cmd = repo_cmd.split("\n")[-1]
+
+        # Get test files
+        test_files_str = instance_dict.get("selected_test_files_to_run", "[]")
+        if isinstance(test_files_str, str):
+            test_files = ",".join(eval(test_files_str))
+        else:
+            test_files = ",".join(test_files_str)
+
+        run_script = instance_dict["run_script.sh"]
+        parsing_script = instance_dict["parsing_script.py"]
+        run_script_path = self.output_dir / "run_script.sh"
+        parsing_script_path = self.output_dir / "parsing_script.py"
+        model_patch_path = self.output_dir / "patch.diff"
+        with open(model_patch_path, "w") as f:
+            # Add a newline to the end of the patch if it doesn't have one
+            model_patch = model_patch + "\n" if not model_patch.endswith("\n") else model_patch
+            f.write(model_patch)
+        with open(run_script_path, "w") as f:
+            f.write(run_script)
+        with open(parsing_script_path, "w") as f:
+            f.write(parsing_script)
+
+        cmd = f"""#!/bin/bash
+set -e
+
+{env_exports}
+
+# Apply patch
+cd /app
+git reset --hard {instance_dict.get("base_commit", "")}
+git checkout {instance_dict.get("base_commit", "")}
+git apply --ignore-space-change --ignore-whitespace -v /root/patch.diff
+
+# Setup repository
+{repo_cmd}
+
+# Run tests
+bash /root/run_script.sh {test_files} > /root/stdout.log 2> /root/stderr.log || true
+
+# Parse results
+python /root/parsing_script.py /root/stdout.log /root/stderr.log /root/output.json
+
+# Move outputs to the mounted directory
+mkdir -p /trajectories_mount/eval_results
+cp /root/output.json /trajectories_mount/eval_results/output.json
+"""
+
+        return cmd
+
+    def check_tests_passed(
+        self,
+        test_results: dict[str, Any],
+        f2p: set[str],
+        p2p: set[str],
+    ) -> bool:
+        if not test_results:
+            return False
+
+        passed_tests = {test["name"] for test in test_results.get("tests", []) if test.get("status") == "PASSED"}
+        required_tests = f2p.union(p2p)
+
+        # Check if all required tests passed
+        if len(passed_tests) == 0 or len(required_tests) == 0:
+            return False
+
+        return required_tests <= passed_tests
 
     async def process_single_datapoint(self, data_point: dict[str, Any]):
         self.output_dir = Path(self.cfg.output_file).parent
@@ -836,103 +930,3 @@ class RunOpenHandsAgent:
             return output_dict
         finally:
             self._cleanup_instance_dataset(instance_dataset_path)
-
-    async def prepare_nv_internal_eval(self, data_point: dict[str, Any], model_patch: str):
-        instance_dict = json.loads(data_point["instance_dict"])
-        base_dockerfile = instance_dict.get("base_dockerfile", "")
-        instance_dockerfile = instance_dict.get("instance_dockerfile", "")
-
-        env_lines = []
-        for line in (base_dockerfile + "\n" + instance_dockerfile).split("\n"):
-            line = line.strip()
-            if line.startswith("ENV "):
-                # Convert ENV KEY=VALUE or ENV KEY VALUE to export KEY="VALUE"
-                export_line = line.replace("ENV ", "export ", 1)
-                # Handle both Docker ENV formats:
-                # 1. ENV KEY=VALUE (with equals)
-                # 2. ENV KEY VALUE (space-separated)
-                if "=" in export_line:
-                    # Format: export KEY=VALUE -> normalize spaces around =
-                    export_line = re.sub(r"\s*=\s*", "=", export_line)
-                else:
-                    # Format: export KEY VALUE -> convert to export KEY="VALUE"
-                    parts = export_line.split(None, 2)  # Split into at most 3 parts
-                    if len(parts) >= 3:  # export KEY VALUE
-                        key = parts[1]
-                        value = parts[2]
-                        export_line = f'export {key}="{value}"'
-
-                env_lines.append(export_line)
-
-        env_exports = "\n".join(env_lines)
-
-        # Get repo setup command
-        repo_cmd = instance_dict.get("before_repo_set_cmd", "").strip()
-        if repo_cmd:
-            repo_cmd = repo_cmd.split("\n")[-1]
-
-        # Get test files
-        test_files_str = instance_dict.get("selected_test_files_to_run", "[]")
-        if isinstance(test_files_str, str):
-            test_files = ",".join(eval(test_files_str))
-        else:
-            test_files = ",".join(test_files_str)
-
-        run_script = instance_dict["run_script.sh"]
-        parsing_script = instance_dict["parsing_script.py"]
-        run_script_path = self.output_dir / "run_script.sh"
-        parsing_script_path = self.output_dir / "parsing_script.py"
-        model_patch_path = self.output_dir / "patch.diff"
-        with open(model_patch_path, "w") as f:
-            # Add a newline to the end of the patch if it doesn't have one
-            model_patch = model_patch + "\n" if not model_patch.endswith("\n") else model_patch
-            f.write(model_patch)
-        with open(run_script_path, "w") as f:
-            f.write(run_script)
-        with open(parsing_script_path, "w") as f:
-            f.write(parsing_script)
-
-        cmd = f"""#!/bin/bash
-set -e
-
-{env_exports}
-
-# Apply patch
-cd /app
-git reset --hard {instance_dict.get("base_commit", "")}
-git checkout {instance_dict.get("base_commit", "")}
-git apply --ignore-space-change --ignore-whitespace -v /root/patch.diff
-
-# Setup repository
-{repo_cmd}
-
-# Run tests
-bash /root/run_script.sh {test_files} > /root/stdout.log 2> /root/stderr.log || true
-
-# Parse results
-python /root/parsing_script.py /root/stdout.log /root/stderr.log /root/output.json
-
-# Move outputs to the mounted directory
-mkdir -p /trajectories_mount/eval_results
-cp /root/output.json /trajectories_mount/eval_results/output.json
-"""
-
-        return cmd
-
-    def check_tests_passed(
-        self,
-        test_results: dict[str, Any],
-        f2p: set[str],
-        p2p: set[str],
-    ) -> bool:
-        if not test_results:
-            return False
-
-        passed_tests = {test["name"] for test in test_results.get("tests", []) if test.get("status") == "PASSED"}
-        required_tests = f2p.union(p2p)
-
-        # Check if all required tests passed
-        if len(passed_tests) == 0 or len(required_tests) == 0:
-            return False
-
-        return required_tests <= passed_tests
