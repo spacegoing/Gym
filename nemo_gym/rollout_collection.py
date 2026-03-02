@@ -119,7 +119,7 @@ class RolloutCollectionConfig(SharedRolloutCollectionConfig):
         return output_fpath.with_stem(output_fpath.stem + "_materialized_inputs").with_suffix(".jsonl")
 
 
-class RolloutCollectionHelper(BaseModel):  # pragma: no cover
+class RolloutCollectionHelper(BaseModel):
     def _preprocess_rows_from_config(self, config: RolloutCollectionConfig) -> List[Dict]:
         range_iterator = repeat(0)
         if config.limit:
