@@ -3,7 +3,10 @@
 #
 # Proof judge resource server: verifier + meta-verifier reward for theorem proving.
 # Ported from nemo_skills JudgeEnvironment (DeepSeek Math style reward).
+import json
 import logging
+import os
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from pydantic import BaseModel
@@ -26,6 +29,9 @@ from nemo_gym.openai_utils import (
 from nemo_gym.server_utils import get_response_json
 
 LOG = logging.getLogger(__name__)
+
+# Hardcoded path for verify JSONL log; set PROOF_JUDGE_LOG_JSONL_PATH env to enable, or leave unset to disable.
+LOG_JSONL_PATH = os.environ.get("PROOF_JUDGE_LOG_JSONL_PATH", None)
 
 SOLUTION_HEADER = "## Solution"
 SELF_EVAL_HEADER = "## Self Evaluation"
@@ -147,8 +153,38 @@ class ProofJudgeResourcesServer(SimpleResourcesServer):
         if not full_response:
             return BaseVerifyResponse(**body.model_dump(), reward=0.0)
 
-        reward, _ = await self._judge_single(problem, full_response)
+        reward, details = await self._judge_single(problem, full_response)
+        if LOG_JSONL_PATH:
+            self._append_log_jsonl(
+                log_path=LOG_JSONL_PATH,
+                problem=problem,
+                generated_sequence=full_response,
+                reward=reward,
+                details=details,
+            )
         return BaseVerifyResponse(**body.model_dump(), reward=reward)
+
+    def _append_log_jsonl(
+        self,
+        *,
+        log_path: str,
+        problem: str,
+        generated_sequence: str,
+        reward: float,
+        details: dict[str, Any],
+    ) -> None:
+        try:
+            record = {
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "problem": problem,
+                "generated_sequence": generated_sequence,
+                "reward": reward,
+                **details,
+            }
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        except Exception as e:
+            LOG.warning("[proof_judge] Failed to append log_jsonl %s: %s", log_path, e)
 
     def _extract_assistant_text(self, response: Any) -> str:
         if not response or not getattr(response, "output", None):
@@ -167,7 +203,8 @@ class ProofJudgeResourcesServer(SimpleResourcesServer):
     async def _call_judge(self, user_content: str) -> str:
         from nemo_gym.server_utils import raise_for_status
 
-        model = self.config.judge_model_name or self.config.judge_model_server.name
+        server_name = self.config.judge_model_server.name
+        model = self.config.judge_model_name or server_name
         params = NeMoGymResponseCreateParamsNonStreaming(
             input=[NeMoGymEasyInputMessage(role="user", content=user_content)],
             model=model,
@@ -175,11 +212,23 @@ class ProofJudgeResourcesServer(SimpleResourcesServer):
             top_p=self.config.top_p,
             max_output_tokens=self.config.max_tokens,
         )
+        LOG.info(
+            "[proof_judge] Calling judge server_name=%s model=%s input_len=%d",
+            server_name,
+            model,
+            len(user_content),
+        )
         resp = await self.server_client.post(
-            server_name=self.config.judge_model_server.name,
+            server_name=server_name,
             url_path="/v1/responses",
             json=params.model_dump(),
         )
+        if resp.status >= 400:
+            LOG.warning(
+                "[proof_judge] Judge returned HTTP %s (server_name=%s). Check vllm_model logs for response body.",
+                resp.status,
+                server_name,
+            )
         await raise_for_status(resp)
         data = await get_response_json(resp)
         judge_resp = NeMoGymResponse.model_validate(data)
@@ -204,7 +253,11 @@ class ProofJudgeResourcesServer(SimpleResourcesServer):
         r_y = extract_boxed_score(verifier_response) or 0.0
 
         if beta == 0:
-            return alpha * r_y, {"r_y": r_y, "s_prime": s_prime}
+            return alpha * r_y, {
+                "r_y": r_y,
+                "s_prime": s_prime,
+                "verifier_response": verifier_response,
+            }
 
         meta_prompt = META_VERIFIER_PROMPT_TEMPLATE.format(
             problem=problem, proof=proof, proof_analysis=self_analysis
@@ -212,7 +265,13 @@ class ProofJudgeResourcesServer(SimpleResourcesServer):
         meta_response = await self._call_judge(meta_prompt)
         r_meta = extract_boxed_score(meta_response) or 0.0
         r_z = (1.0 - abs(s_prime - r_y)) * r_meta
-        return alpha * r_y + beta * r_z, {"r_y": r_y, "r_meta": r_meta, "s_prime": s_prime}
+        return alpha * r_y + beta * r_z, {
+            "r_y": r_y,
+            "r_meta": r_meta,
+            "s_prime": s_prime,
+            "verifier_response": verifier_response,
+            "meta_response": meta_response,
+        }
 
 
 if __name__ == "__main__":
