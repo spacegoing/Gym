@@ -15,8 +15,8 @@ proof_judge:
       top_p: 0.95
       max_tokens: 8192  # must be < max_model_len - input_tokens (vLLM rejects 100000 when context=100000)
       assert_think_end: false
-      # log_jsonl_path: null  # set to a path (e.g. /path/to/proof_judge_log.jsonl) to append each verify: problem, generated_sequence, verifier_response, meta_response, reward
-      domain: math  # Gym allows: math,coding,agent,knowledge,instruction_following,long_context,safety,games,translation,e2e,rlhf,other
+      # log_jsonl_path: null  # set to a path to append each verify: problem, generated_sequence, verifier_response, meta_response, reward
+      domain: math
       description: Theorem proving with verifier + meta-verifier judge
 
 # Agent that uses policy for generation and proof_judge for verification.

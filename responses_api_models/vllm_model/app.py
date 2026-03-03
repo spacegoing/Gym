@@ -476,9 +476,21 @@ class VLLMModel(SimpleResponsesAPIModel):
         if self.config.extra_body:
             create_params = self.config.extra_body | create_params
 
+        # If no tools are requested, use tool_choice "none" so vLLM does not require
+        # --enable-auto-tool-choice (e.g. proof_judge_model and other chat-only backends).
+        if not create_params.get("tools"):
+            create_params["tool_choice"] = "none"
+
         try:
+            num_messages = len(create_params.get("messages", []))
+            max_out = create_params.get("max_output_tokens", "unset")
             print(
-                f"[DEBUG chat_template_kwargs][gym->vllm_model] process={self.config.name} sending.chat_template_kwargs={create_params.get('chat_template_kwargs')} add_generation_prompt={create_params.get('add_generation_prompt')}"
+                f"[vllm_model] process={self.config.name} sending to vLLM: model={self.config.model} num_messages={num_messages} max_output_tokens={max_out}",
+                flush=True,
+            )
+            print(
+                f"[DEBUG chat_template_kwargs][gym->vllm_model] process={self.config.name} sending.chat_template_kwargs={create_params.get('chat_template_kwargs')} add_generation_prompt={create_params.get('add_generation_prompt')}",
+                flush=True,
             )
             chat_completion_dict = await client.create_chat_completion(**create_params)
         except ClientResponseError as e:
@@ -517,6 +529,10 @@ class VLLMModel(SimpleResponsesAPIModel):
                     ],
                 )
             else:
+                print(
+                    f"[vllm_model] vLLM returned HTTP {e.status} (process={self.config.name}): {result_content_str[:2000]}",
+                    flush=True,
+                )
                 raise e
 
         choice_dict = chat_completion_dict["choices"][0]
