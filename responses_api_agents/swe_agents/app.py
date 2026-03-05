@@ -78,6 +78,14 @@ class AgentPromptOverride(BaseModel):
         default="CodeActAgent",
         description="Class to use for the agent",
     )
+    diversify_tool_names: Optional[bool] = Field(
+        default=False,
+        description="If True, randomly select from tool names each run. If False, use the tool names in the order they are defined.",
+    )
+    camel_case_tool_names: Optional[bool] = Field(
+        default=False,
+        description="If True, convert tool names to camel case. If False, use the tool names as is.",
+    )
 
 
 class SWEBenchWrapperConfig(BaseResponsesAPIAgentConfig):
@@ -131,7 +139,7 @@ class SWEBenchWrapperConfig(BaseResponsesAPIAgentConfig):
         "If False (default), selection is deterministic per instance_id.",
     )
 
-    openhands_should_log: bool = False
+    openhands_should_log: bool = True
     debug: bool = False
 
 
@@ -182,6 +190,8 @@ class SWEBenchWrapperInstanceConfig(SWEBenchWrapperServerConfig, SWEBenchWrapper
     resolved_user_prompt_template: Optional[str] = None
     resolved_system_prompt_template: Optional[str] = None
     resolved_agent_cls: str = "CodeActAgent"
+    resolved_diversify_tool_names: Optional[bool] = False
+    resolved_camel_case_tool_names: Optional[bool] = False
 
     # Set later
     eval_command: Optional[ExecuteContainerCommandArgs] = None
@@ -652,6 +662,32 @@ AGENT_FRAMEWORK_COMMIT={self.config.agent_framework_commit} \\
                 "export DEBUG_RUNTIME=False && "
             )
 
+        if data_point["dataset_name"] == "nv-internal-1":
+            crypto_fix_cmd = (
+                "_crypto_fix_dir=$(mktemp -d /tmp/crypto_fix_XXXXXX) && "
+                "/openhands_setup/OpenHands/.venv/bin/python -m pip install "
+                "    --target=$_crypto_fix_dir "
+                "    --index-url https://pypi.org/simple "
+                "    --trusted-host pypi.org --trusted-host files.pythonhosted.org "
+                "    --only-binary :all: "
+                "    --no-deps --no-cache-dir "
+                "    --quiet "
+                "    'cryptography<43' && "
+                "export PYTHONPATH=$_crypto_fix_dir:${PYTHONPATH:-} &&"
+            )
+        else:
+            crypto_fix_cmd = ""
+
+        if self.config.resolved_diversify_tool_names:
+            diversify_tool_names_cmd = "export DIVERSIFY_TOOL_NAMES=true &&"
+        else:
+            diversify_tool_names_cmd = ""
+
+        if self.config.resolved_camel_case_tool_names:
+            camel_case_tool_names_cmd = "export CAMEL_CASE_TOOL_NAMES=true &&"
+        else:
+            camel_case_tool_names_cmd = ""
+
         agent_main_cmd = (
             "if [ -d /workspace ]; then "
             "    echo 'Exiting because /workspace is mounted.' && "
@@ -687,19 +723,9 @@ AGENT_FRAMEWORK_COMMIT={self.config.agent_framework_commit} \\
             "export POETRY_VIRTUALENVS_PATH=/openhands_setup/OpenHands && "
             f"export TMUX_MEMORY_LIMIT={self.config.apptainer_memory_limit_mb} && "
             f"export COMMAND_EXEC_TIMEOUT={self.config.command_exec_timeout} && "
-            # TODO (sugam): fix cryptography issue
-            # "override_dir=$(mktemp -d /tmp/cryptography_override.XXXX) && "
-            # # Reinstall cryptography inside the container (via poetry's venv) using a compatible wheel
-            # # Clean any broken installs to avoid missing-file errors, then force a wheel-only reinstall
-            # "site_packages_dir=/openhands_setup/OpenHands/.venv/lib/python3.12/site-packages && "
-            # 'if [ -d "$site_packages_dir" ]; then '
-            # '    find "$site_packages_dir" -maxdepth 1 -name "cryptography*" -exec rm -rf {} +; '
-            # "fi && "
-            # "poetry run python -m pip install --index-url https://pypi.org/simple "
-            # "    --trusted-host pypi.org --trusted-host files.pythonhosted.org "
-            # "    --only-binary cryptography --no-deps --force-reinstall 'cryptography==42.0.8' && "
-            # disable logging to file in the oh repo
-            # set up config files
+            f"{crypto_fix_cmd}"
+            f"{diversify_tool_names_cmd}"
+            f"{camel_case_tool_names_cmd}"
             f"echo {shlex.quote(config_str)} >{config_file_path} && "
             # f" export EVAL_OUTPUT_DIR={eval_dir_in_openhands} && "
             f"./evaluation/benchmarks/swe_bench/scripts/run_infer.sh "
@@ -716,6 +742,12 @@ AGENT_FRAMEWORK_COMMIT={self.config.agent_framework_commit} \\
             f"    {local_dataset_path} "
             f"    {config_file_path}"
         )
+
+        if self.config.resolved_user_prompt_template is not None:
+            agent_main_cmd += "    /openhands_setup/OpenHands/user_prompt.j2 "
+        if self.config.resolved_user_prompt_template is not None:
+            agent_main_cmd += "    /openhands_setup/OpenHands/system_prompt.j2 "
+            agent_main_cmd += "    /openhands_setup/OpenHands/system_prompt_long_horizon.j2 "
 
         agent_script_name = f"agent_script_{agent_run_id}.sh"
         agent_script_path = self.config.persistent_dir / agent_script_name
@@ -1361,6 +1393,7 @@ class SWEBenchWrapper(SimpleResponsesAPIAgent):
             params.resolved_user_prompt_template = self._resolve_absolute_path(selected.user_prompt_template)
             params.resolved_system_prompt_template = self._resolve_absolute_path(selected.system_prompt_template)
             params.resolved_agent_cls = selected.agent_cls
+            params.resolved_diversify_tool_names = selected.diversify_tool_names
 
         if params.problem_info["dataset_name"] == "nv-internal-1":
             dataset_processor = NVInternalDatasetProcessor(config=params)
