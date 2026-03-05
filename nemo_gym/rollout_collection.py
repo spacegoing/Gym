@@ -137,7 +137,7 @@ class RolloutCollectionHelper(BaseModel):  # pragma: no cover
                     # For ng_profile to match rollouts to tasks
                     if TASK_INDEX_KEY_NAME in row:
                         result[TASK_INDEX_KEY_NAME] = row[TASK_INDEX_KEY_NAME]
-                    f.write(json.dumps(result) + "\n")
+                    f.write(json.dumps(result, indent=2) + "\n")
 
             await tqdm.gather(*map(_post_coroutine, rows), desc="Collecting rollouts", miniters=tqdm_miniters)
 
