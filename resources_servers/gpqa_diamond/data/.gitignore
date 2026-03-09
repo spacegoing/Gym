@@ -1,0 +1,8 @@
+*train.jsonl
+*train_prepare.jsonl
+*example_prepare.jsonl
+*rollouts.jsonl
+*rollouts_materialized_inputs.jsonl
+*rollouts_reward_profiling.jsonl
+*rollouts_agent_metrics.json
+*diamond_raw.jsonl
