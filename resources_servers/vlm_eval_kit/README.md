@@ -7,6 +7,7 @@
 3. Dataset build call: https://github.com/open-compass/VLMEvalKit/blob/00804217f868058f871f5ff252a7b9623c3475d9/run.py#L294
 4. Run inference call: https://github.com/open-compass/VLMEvalKit/blob/00804217f868058f871f5ff252a7b9623c3475d9/vlmeval/inference.py#L133
 5. Judge model configs: https://github.com/open-compass/VLMEvalKit/blob/00804217f868058f871f5ff252a7b9623c3475d9/run.py#L363
+6. Actual requests.post call to OpenAI endpoint: https://github.com/open-compass/VLMEvalKit/blob/00804217f868058f871f5ff252a7b9623c3475d9/vlmeval/api/gpt.py#L234
 
 ## Accuracy reproduction using GPT-4o-mini-20240718
 |Benchmark|Name for run.py|Judge|Num samples|Reported score|Original repo repro|Gym repro|
