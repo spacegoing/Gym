@@ -24,7 +24,7 @@ code_gen_simple_agent:
         type: train
         jsonl_fpath: resources_servers/code_gen/data/train_v1.jsonl
         huggingface_identifier:
-          repo_id: nvidia/Nemotron-RL-code-competitive_coding-v1
+          repo_id: nvidia/Nemotron-RL-Competitive-Coding-v1
           artifact_fpath: train.jsonl
         license: TBD
         num_repeats: 1

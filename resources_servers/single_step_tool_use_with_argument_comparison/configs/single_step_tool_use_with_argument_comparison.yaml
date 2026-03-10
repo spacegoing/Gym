@@ -27,7 +27,7 @@ single_step_tool_use_with_argument_comparison_agent:
           version: 0.0.1
           artifact_fpath: train.jsonl
         huggingface_identifier:
-          repo_id: nvidia/Nemotron-RL-Agentic-Conversational-Tool-Use-v1
+          repo_id: nvidia/Nemotron-RL-Agentic-Conversational-Tool-Use-Pivot-v1
           artifact_fpath: train.jsonl
         license: Apache 2.0
       - name: validation

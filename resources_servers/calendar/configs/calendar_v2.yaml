@@ -20,13 +20,13 @@ calendar_simple_agent:
         type: train
         jsonl_fpath: resources_servers/calendar/data/train_v2.jsonl
         huggingface_identifier:
-          repo_id: nvidia/Nemotron-RL-instruction_following-calendar_scheduling-v2
+          repo_id: nvidia/Nemotron-RL-Instruction-Following-Calendar-v2
           artifact_fpath: train.jsonl
         license: TBD
       - name: validation
         type: validation
         jsonl_fpath: resources_servers/calendar/data/validation_v2.jsonl
         huggingface_identifier:
-          repo_id: nvidia/Nemotron-RL-instruction_following-calendar_scheduling-v2
+          repo_id: nvidia/Nemotron-RL-Instruction-Following-Calendar-v2
           artifact_fpath: validation.jsonl
         license: TBD
