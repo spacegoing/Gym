@@ -4,6 +4,7 @@
 
 import asyncio
 import logging
+import re
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
@@ -22,10 +23,48 @@ from resources_servers.spider2_lite.eval_utils import (
     execute_sqlite_async,
 )
 from resources_servers.spider2_lite.setup_spider2 import ensure_spider2_lite
-from resources_servers.text_to_sql.app import extract_sql_from_response
 
 
 logger = logging.getLogger(__name__)
+
+
+def extract_sql_from_response(text: str) -> Optional[str]:
+    """Extract SQL query from model response.
+
+    Attempts to extract SQL in the following order:
+    1. SQL wrapped in ```sql ... ``` code blocks
+    2. SQL wrapped in ``` ... ``` code blocks
+    3. Raw SQL statements starting with SELECT/INSERT/UPDATE/DELETE/WITH
+
+    Returns:
+        Extracted SQL query or None if no SQL found.
+    """
+    if not text:
+        return None
+
+    sql_block_pattern = r"```sql\s*([\s\S]*?)\s*```"
+    matches = re.findall(sql_block_pattern, text, re.IGNORECASE)
+    if matches:
+        return matches[-1].strip()
+
+    generic_block_pattern = r"```\s*([\s\S]*?)\s*```"
+    matches = re.findall(generic_block_pattern, text)
+    if matches:
+        for match in reversed(matches):
+            content = match.strip()
+            if re.match(r"^\s*(SELECT|INSERT|UPDATE|DELETE|WITH|CREATE|ALTER|DROP)\s", content, re.IGNORECASE):
+                return content
+
+    sql_start = re.search(r"(?:SELECT|INSERT|UPDATE|DELETE|WITH)\s", text, re.IGNORECASE)
+    if sql_start:
+        last_semicolon = text.rfind(";")
+        if last_semicolon >= sql_start.start():
+            extracted = text[sql_start.start() : last_semicolon + 1].strip()
+        else:
+            extracted = text[sql_start.start() :].strip()
+        return extracted.rstrip(";") + ";"
+
+    return None
 
 
 class FailureCode(str, Enum):
