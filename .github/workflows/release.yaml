@@ -47,6 +47,7 @@ jobs:
       version-bump-branch: ${{ inputs.version-bump-branch }}
       create-gh-release: ${{ inputs.create-gh-release }}
       packaging: uv
+      app-id: ${{ vars.BOT_ID }}
     secrets:
       TWINE_USERNAME: ${{ secrets.TWINE_USERNAME }}
       TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
