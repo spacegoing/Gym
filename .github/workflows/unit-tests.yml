@@ -35,21 +35,33 @@ jobs:
           echo "Failing on draft PR to enforce this check to run"
           exit 1
 
-      - name: Detect changed server folders
+      - name: Detect changed files
         id: changes
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
-            core:
-              - 'nemo_gym/**'
-              - 'tests/unit_tests/**'
-              - 'pyproject.toml'
-              - 'uv.lock'
-              - '.github/workflows/**'
-            servers:
-              - 'resources_servers/**'
-              - 'responses_api_agents/**'
-              - 'responses_api_models/**'
+        run: |
+          # Get list of changed files compared to base branch
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }} HEAD)
+
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+          echo ""
+
+          # Check if core files changed
+          CORE_CHANGED="false"
+          if echo "$CHANGED_FILES" | grep -qE '^(nemo_gym/|tests/unit_tests/|pyproject.toml|uv.lock|.github/workflows/)'; then
+            CORE_CHANGED="true"
+            echo "Core files changed detected"
+          fi
+
+          # Check if server files changed
+          SERVERS_CHANGED="false"
+          if echo "$CHANGED_FILES" | grep -qE '^(resources_servers/|responses_api_agents/|responses_api_models/)'; then
+            SERVERS_CHANGED="true"
+            echo "Server files changed detected"
+          fi
+
+          # Set outputs for later steps
+          echo "core=$CORE_CHANGED" >> $GITHUB_OUTPUT
+          echo "servers=$SERVERS_CHANGED" >> $GITHUB_OUTPUT
 
       - name: Setup for test
         run: |
