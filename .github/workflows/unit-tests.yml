@@ -27,13 +27,29 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: 'recursive'
+          fetch-depth: 0  # Need full history to detect changes
 
       - name: Fail on draft PRs
         if: github.event.pull_request.draft == true
         run: |
           echo "Failing on draft PR to enforce this check to run"
           exit 1
+
+      - name: Detect changed server folders
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            core:
+              - 'nemo_gym/**'
+              - 'tests/unit_tests/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.github/workflows/**'
+            servers:
+              - 'resources_servers/**'
+              - 'responses_api_agents/**'
+              - 'responses_api_models/**'
 
       - name: Setup for test
         run: |
@@ -51,5 +67,58 @@ jobs:
       - name: Test
         run: |
           source .venv/bin/activate
+
+          # Always run core library tests
+          echo "Running core library tests..."
           ng_dev_test
-          ng_test_all +fail_on_total_and_test_mismatch=true
+
+          # Determine which server tests to run based on what changed
+          if [[ "${{ steps.changes.outputs.core }}" == "true" ]]; then
+            echo "✓ Core files changed - running ALL server tests for safety"
+            ng_test_all +fail_on_total_and_test_mismatch=true
+
+          elif [[ "${{ steps.changes.outputs.servers }}" == "true" ]]; then
+            echo "✓ Server files changed - testing only changed servers"
+
+            # Get list of changed server folders
+            CHANGED_SERVERS=$(git diff --name-only origin/${{ github.base_ref }} HEAD | \
+              grep -E '^(resources_servers|responses_api_agents|responses_api_models)/' | \
+              cut -d'/' -f1-2 | sort -u)
+
+            if [ -z "$CHANGED_SERVERS" ]; then
+              echo "⚠ No server folders changed (only server files outside folders)"
+              echo "Running full test suite to be safe"
+              ng_test_all +fail_on_total_and_test_mismatch=true
+            else
+              echo "Changed servers detected:"
+              echo "$CHANGED_SERVERS" | sed 's/^/  - /'
+
+              # Test each changed server individually
+              EXIT_CODE=0
+              for server in $CHANGED_SERVERS; do
+                echo ""
+                echo "================================================"
+                echo "Testing: $server"
+                echo "================================================"
+                if ng_test +entrypoint=$server; then
+                  echo "✓ $server passed"
+                else
+                  echo "✗ $server failed"
+                  EXIT_CODE=1
+                fi
+              done
+
+              if [ $EXIT_CODE -ne 0 ]; then
+                echo ""
+                echo "❌ Some server tests failed"
+                exit 1
+              else
+                echo ""
+                echo "✅ All changed server tests passed"
+              fi
+            fi
+
+          else
+            echo "ℹ No core or server files changed - skipping server tests"
+            echo "Only core library tests were run"
+          fi
