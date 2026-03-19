@@ -1,0 +1,23 @@
+qydomain:
+  resources_servers:
+    qydomain:
+      entrypoint: app.py
+      domain: games
+      verified: false
+      description: QY domain scoring for typos, connections, and plot unscrambling tasks
+      value: Evaluate word puzzles, spelling correction, and narrative ordering
+
+qydomain_simple_agent:
+  responses_api_agents:
+    simple_agent:
+      entrypoint: app.py
+      resources_server:
+        type: resources_servers
+        name: qydomain
+      model_server:
+        type: responses_api_models
+        name: policy_model
+      datasets:
+      - name: example
+        type: example
+        jsonl_fpath: resources_servers/qydomain/data/example.jsonl
